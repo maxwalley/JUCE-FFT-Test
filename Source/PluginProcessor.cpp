@@ -19,12 +19,10 @@ FftTestAudioProcessor::FftTestAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       ), forwardTransform {fftOrder}, fftInputArrayIndex {0}
+                       ), forwardTransform {fftOrder}
 #endif
 {
     numChannelsChanged();
-    
-    juce::Timer::startTimer(10);
 }
 
 FftTestAudioProcessor::~FftTestAudioProcessor()
@@ -151,25 +149,32 @@ void FftTestAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             //A whole new buffer has been written to and is ready for processing
             if(freqBuffers[channel].fftInputArrayIndex == fftSize)
             {
+                
                 //Time domain to freq domain
-                forwardTransform.perform(freqBuffers[channel].fftData.data(), freqBuffers[channel].fftData.data(), false);
+                forwardTransform.perform(freqBuffers[channel].fftInputData.data(), freqBuffers[channel].fftOutputData.data(), false);
                 
                 //Freq processing here
                 
+                /*
+                 This is needed if we wanted to change the frequency data and change the signal back for playing
+                 
                 //Inverse to get back to time domain
-                forwardTransform.perform(freqBuffers[channel].fftData.data(), freqBuffers[channel].fftData.data(), true);
+                forwardTransform.perform(freqBuffers[channel].fftOutputData.data(), freqBuffers[channel].fftInputData.data(), true);
                 
-                std::copy(freqBuffers[channel].fftData.begin(), freqBuffers[channel].fftData.end(), freqBuffers[channel].delayedBuffer
+                //copy the buffer into the delayed buffer to be played
+                std::copy(freqBuffers[channel].fftInputData.begin(), freqBuffers[channel].fftInputData.end(), freqBuffers[channel].delayedBuffer
                           .data());
-                
+                */
                 freqBuffers[channel].fftInputArrayIndex = 0;
                 
             }
             //Write to the fft buffer
-            freqBuffers[channel].fftData[freqBuffers[channel].fftInputArrayIndex].real(channelData[sample]);
+            //Sets the real part of the complex number to the time domain data
+            freqBuffers[channel].fftInputData[freqBuffers[channel].fftInputArrayIndex].real(channelData[sample]);
             
-            //Read from the delayed buffer
-            channelData[sample] = freqBuffers[channel].delayedBuffer[freqBuffers[channel].fftInputArrayIndex].real();
+            //Read from the delayed buffer - We don't need this since we are not changing the data based on its frequency domain
+            
+            //channelData[sample] = freqBuffers[channel].delayedBuffer[freqBuffers[channel].fftInputArrayIndex].real();
             
             freqBuffers[channel].fftInputArrayIndex++;
         }
@@ -201,14 +206,29 @@ void FftTestAudioProcessor::setStateInformation (const void* data, int sizeInByt
     // whose contents will have been created by the getStateInformation() call.
 }
 
+float FftTestAudioProcessor::getAmplitudeAtFreq (int frequency, int channel) const
+{
+    return std::abs(freqBuffers[channel].fftOutputData[std::floor(float(frequency) / (getSampleRate() / float(fftSize)))]);
+}
+
+int FftTestAudioProcessor::getFreqWithHighestAmpl (int channel) const
+{
+    //Finds the element with the highest freq
+    auto maxBin = std::max_element(freqBuffers[channel].fftOutputData.begin(), freqBuffers[channel].fftOutputData.end(), [](const std::complex<float>& first, const std::complex<float>& second)
+    {
+        return abs(first) < abs(second);
+    });
+    
+    float binNum = (freqBuffers[channel].fftOutputData.begin() - maxBin) * -1;
+    
+    float centFreq = (binNum * getSampleRate()) / float(fftSize);
+    
+    return floor(centFreq);
+}
+
 void FftTestAudioProcessor::numChannelsChanged()
 {
     freqBuffers.resize(getTotalNumOutputChannels());
-}
-
-void FftTestAudioProcessor::timerCallback()
-{
-    //std::cout << std::abs(fftData[std::floor(1000/(getSampleRate()/float(fftSize)))]) << std::endl;
 }
 
 //==============================================================================

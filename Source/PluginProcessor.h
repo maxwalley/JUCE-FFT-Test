@@ -14,7 +14,8 @@
 struct ChannelFreqBuffers
 {
 public:
-    std::array<std::complex<float>, 1024> fftData;
+    std::array<std::complex<float>, 1024> fftInputData;
+    std::array<std::complex<float>, 1024> fftOutputData;
     std::array<std::complex<float>, 1024> delayedBuffer;
     
     int fftInputArrayIndex;
@@ -22,8 +23,7 @@ public:
 
 /**
 */
-class FftTestAudioProcessor  : public juce::AudioProcessor,
-                               public juce::Timer
+class FftTestAudioProcessor  : public juce::AudioProcessor
 {
 public:
     //==============================================================================
@@ -62,12 +62,13 @@ public:
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+    
+    float getAmplitudeAtFreq (int frequency, int channel) const;
+    int getFreqWithHighestAmpl (int channel) const;
 
 private:
    
     void numChannelsChanged() override;
-    
-    void timerCallback() override;
     
     const int fftOrder = 10;
     const int fftSize = std::pow(2, fftOrder);
@@ -75,11 +76,6 @@ private:
     juce::dsp::FFT forwardTransform;
     
     std::vector<ChannelFreqBuffers> freqBuffers;
-    
-    std::array<std::complex<float>, 1024> fftData;
-    std::array<std::complex<float>, 1024> delayedBuffer;
-    
-    int fftInputArrayIndex;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FftTestAudioProcessor)
 };
